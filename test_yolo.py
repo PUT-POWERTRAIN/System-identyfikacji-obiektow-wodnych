@@ -10,7 +10,7 @@ else:
     print("Status: UWAGA! Brak CUDA, lecimy na powolnym CPU!")
 
 print("\n--- 2. ŁADOWANIE MODELU ---")
-model = YOLO('yolov8n.pt')
+model = YOLO('best_lodz.pt')
 
 print("\n--- 3. ROZGRZEWKA KARTY (Warm-up) ---")
 # Pierwsze przepuszczenie zdjęcia (verbose=False żeby nie śmiecić w konsoli)
@@ -19,7 +19,7 @@ print("Karta rozgrzana, rdzenie gotowe.")
 
 print("\n--- 4. WŁAŚCIWA DETEKCJA ---")
 # Prawdziwy test prędkości Jetsona
-results = model('bus.jpg', device='cuda')
+results = model('images.jpeg', device='cuda')
 
 # Zapis i koniec
 for r in results:
