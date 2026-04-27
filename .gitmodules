@@ -1,0 +1,3 @@
+[submodule "depth_and_distance_measure"]
+	path = depth_and_distance_measure
+	url = https://github.com/DepthAnything/Depth-Anything-V2.git
