@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import matplotlib
 import time
-
+import open3d as o3d
 from depth_and_distance_measure.depth_anything_v2.dpt import DepthAnythingV2
 
 # CUDA Check
@@ -33,6 +33,20 @@ model_configs = {
 depth_model = DepthAnythingV2(**model_configs['vits'])
 depth_model.load_state_dict(torch.load('depth_anything_v2_vits.pth', map_location='cpu', weights_only=True))
 depth_model = depth_model.to(DEVICE).eval()
+# konfiguracja do open3d
+width, height = 640, 480
+fx = fy = 500
+cx = width/2
+cy = height/2
+
+# parametry kamery (wyciagniete z dupy)
+camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(width, height, fx, fy, cx, cy)
+
+vis = o3d.visualization.Visualizer()
+vis.create_window(window_name='3D Visualization', width=800, height=600)
+pcd = o3d.geometry.PointCloud()
+vis.add_geometry(pcd)
+is_first_frame = True
 
 while True:
     ret, frame = cap.read()
@@ -53,8 +67,7 @@ while True:
 
     # Using OpenCV for colormap is vastly faster than matplotlib
     colored_depth_image = cv2.applyColorMap(depth_normalized, cv2.COLORMAP_TURBO)
-
-
+    
     for box in yolo_result[0].boxes:
     
         x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -75,20 +88,43 @@ while True:
     
     
         cv2.rectangle(colored_depth_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
     
         label = f"{class_name}: Dist {median_depth:.2f}"
     
     
         cv2.putText(colored_depth_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 4)
         cv2.putText(colored_depth_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
     curr_time = time.time()
     fps = 1 / (curr_time - prev_time + 1e-6)
     prev_time = curr_time
     cv2.putText(colored_depth_image, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    invert_depth = (depth_normalized).astype(np.float32) + 1.0
+    
+    o3d_color = o3d.geometry.Image(frame_rgb)
+    o3d_depth = o3d.geometry.Image(invert_depth)
 
+    rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(o3d_color, o3d_depth, depth_scale=1.0, depth_trunc=10000.0, convert_rgb_to_intensity=False)
+    temp_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(
+        rgbd_image, camera_intrinsic
+    )
+
+    pcd.points = temp_pcd.points
+    pcd.colors = temp_pcd.colors
+    
+    if is_first_frame:
+        vis.reset_view_point(True)
+        is_first_frame = False
+        
     display_image = cv2.hconcat([frame, colored_depth_image])
     cv2.imshow('3D Detection', display_image) # showing both frames again for better visualization
+    vis.update_geometry(pcd)
+    vis.poll_events()
+    vis.update_renderer()
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
