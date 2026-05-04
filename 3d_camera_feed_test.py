@@ -15,11 +15,11 @@ if torch.cuda.is_available():
 else:
     print("CUDA is not working, falling back to CPU.")
 
-cap = cv2.VideoCapture(0)
-cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) # Prevent camera buffering latency
-if not cap.isOpened():
-    print("Error: Could not open webcam.")
-    exit()
+#cap = cv2.VideoCapture(0)
+#cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) # Prevent camera buffering latency
+#if not cap.isOpened():
+ #   print("Error: Could not open webcam.")
+  #  exit()
 
 prev_time = time.time()
 
@@ -48,20 +48,17 @@ vis.create_window(window_name='3D Visualization', width=800, height=600)
 pcd = o3d.geometry.PointCloud()
 vis.add_geometry(pcd)
 is_first_frame = True
+original_frame_test = cv2.imread('../YOLO/test_photos/123.jpg')
+original_frame_test = cv2.resize(original_frame_test, (640, 480))
 
 while True:
-    ret, frame = cap.read()
-    if not ret:
-        print("Error: Failed to grab frame.")
-        break
-        
-    # Resize frame manually here since GStreamer fails when we set it on the camera directly
-    frame = cv2.resize(frame, (640, 480))
+    # Reset frame_test to the clean image every loop so we don't draw boxes on top of boxes!
+    frame_test = original_frame_test.copy()
 
     with torch.inference_mode():
-        yolo_result = model(frame, device=DEVICE, conf=0.85, verbose=False)
+        yolo_result = model(frame_test, device=DEVICE, conf=0.85, verbose=False)
         # Using 252 instead of 518 significantly speeds up inference while keeping decent quality
-        depth_map = depth_model.infer_image(frame, 252) 
+        depth_map = depth_model.infer_image(frame_test, 252) 
 
     depth_min, depth_max = depth_map.min(), depth_map.max()
     depth_normalized = ((depth_map - depth_min) / (depth_max - depth_min + 1e-8) * 255.0).astype(np.uint8)
@@ -114,26 +111,26 @@ while True:
     
     
         cv2.rectangle(colored_depth_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.rectangle(frame_test, (x1, y1), (x2, y2), (0, 255, 0), 2)
     
         label = f"{class_name}: Dist {median_depth:.2f}"
     
     
         cv2.putText(colored_depth_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 4)
         cv2.putText(colored_depth_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        cv2.putText(frame_test, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
     curr_time = time.time()
     fps = 1 / (curr_time - prev_time + 1e-6)
     prev_time = curr_time
     cv2.putText(colored_depth_image, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     # Prepare BEV map display
-    display_image = cv2.hconcat([frame, colored_depth_image, bev_map])
+    display_image = cv2.hconcat([frame_test, colored_depth_image, bev_map])
     cv2.namedWindow('3D Detection', cv2.WINDOW_NORMAL)
     cv2.imshow('3D Detection', display_image)
     
     # Update Open3D Point Cloud
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    frame_rgb = cv2.cvtColor(frame_test, cv2.COLOR_BGR2RGB)
     # DepthAnything outputs disparity (closer objects have higher values).
     # Open3D expects depth (closer objects have lower values). 
     # We subtract from 255 to properly invert the point cloud in 3D space.
@@ -167,7 +164,7 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-cap.release()
+    # cap.release() not needed in test script
 
         
 
