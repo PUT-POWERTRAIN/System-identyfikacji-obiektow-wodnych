@@ -23,7 +23,7 @@ if not cap.isOpened():
 
 prev_time = time.time()
 
-model = YOLO('/home/powertrain1/YOLO/models/yolo_jetson_best.pt')
+model = YOLO('/home/powertrain1/YOLO/models/yolo_jetson_best.engine')
 
 
 
@@ -73,6 +73,8 @@ while True:
     cv2.circle(bev_map, (320, 480), 10, (0, 0, 255), -1) # Camera position marker
     cv2.putText(bev_map, "Camera", (275, 465), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
+    display_frame = frame.copy()
+    
     for box in yolo_result[0].boxes:
     
         x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -114,25 +116,25 @@ while True:
     
     
         cv2.rectangle(colored_depth_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
     
         label = f"{class_name}: Dist {median_depth:.2f}"
     
     
         cv2.putText(colored_depth_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 4)
         cv2.putText(colored_depth_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        cv2.putText(display_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
     curr_time = time.time()
     fps = 1 / (curr_time - prev_time + 1e-6)
     prev_time = curr_time
     cv2.putText(colored_depth_image, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     # Prepare BEV map display
-    display_image = cv2.hconcat([frame, colored_depth_image, bev_map])
+    display_image = cv2.hconcat([display_frame, colored_depth_image, bev_map])
     cv2.namedWindow('3D Detection', cv2.WINDOW_NORMAL)
     cv2.imshow('3D Detection', display_image)
     
-    # Update Open3D Point Cloud
+    # Update Open3D Point Cloud using the pristine frame, without green boxes glued to the 3D texture
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     # DepthAnything outputs disparity (closer objects have higher values).
     # Open3D expects depth (closer objects have lower values). 

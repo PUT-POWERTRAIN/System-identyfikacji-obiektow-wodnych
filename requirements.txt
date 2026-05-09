@@ -1,0 +1,8 @@
+ultralytics
+torch
+torchvision
+opencv-python
+matplotlib
+pyyaml
+gradio==4.29.0
+gradio_imageslider
