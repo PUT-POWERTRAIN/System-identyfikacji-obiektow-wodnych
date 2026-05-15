@@ -1,3 +1,4 @@
+import argparse
 import os
 import torch
 from ultralytics import YOLO
@@ -8,6 +9,22 @@ import time
 import open3d as o3d
 from depth_and_distance_measure.depth_anything_v2.dpt import DepthAnythingV2
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="3D Camera Feed with YOLO and Depth Estimation")
+    parser.add_argument('--model', type=str, default='/home/powertrain1/YOLO/models/yolo_jetson_best.engine',
+                        help="Path to YOLO model file (.engine or .pt)")
+    parser.add_argument('--depth_weights', type=str, default='depth_anything_v2_vits.pth',
+                        help="Path to DepthAnythingV2 weights (.pth)")
+    parser.add_argument('--camera', type=str, default='0',
+                        help="Camera index or path to video file")
+    parser.add_argument('--conf', type=float, default=0.85,
+                        help="YOLO confidence threshold")
+    parser.add_argument('--imgsz', type=int, default=640,
+                        help="YOLO inference image size")
+    return parser.parse_args()
+
+args = parse_args()
+
 # CUDA Check
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 if torch.cuda.is_available():
@@ -15,27 +32,34 @@ if torch.cuda.is_available():
 else:
     print("CUDA is not working, falling back to CPU.")
 
-cap = cv2.VideoCapture(0)
+# Handle camera input (int for camera index, str for video file)
+try:
+    cam_input = int(args.camera)
+except ValueError:
+    cam_input = args.camera
+
+cap = cv2.VideoCapture(cam_input)
 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) # Prevent camera buffering latency
 if not cap.isOpened():
-    print("Error: Could not open webcam.")
+    print(f"Error: Could not open webcam/video: {args.camera}")
     exit()
 
 prev_time = time.time()
 
-model = YOLO('/home/powertrain1/YOLO/models/yolo_jetson_best.engine')
-
-
+print(f"Loading YOLO model: {args.model}")
+model = YOLO(args.model)
 
 model_configs = {
     'vits': {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]}
 }
+print(f"Loading Depth model: {args.depth_weights}")
 depth_model = DepthAnythingV2(**model_configs['vits'])
-depth_model.load_state_dict(torch.load('depth_anything_v2_vits.pth', map_location='cpu', weights_only=True))
+depth_model.load_state_dict(torch.load(args.depth_weights, map_location='cpu', weights_only=True))
 depth_model = depth_model.to(DEVICE).eval()
-# We will create a BEV map dynamically in the loop
+
 # konfiguracja do open3d
 width, height = 640, 480
+
 fx = fy = 500
 o3d_cx = width/2
 o3d_cy = height/2
@@ -59,7 +83,7 @@ while True:
     frame = cv2.resize(frame, (640, 480))
 
     with torch.inference_mode():
-        yolo_result = model(frame, device=DEVICE, conf=0.85, verbose=False)
+        yolo_result = model(frame, device=DEVICE, conf=args.conf, imgsz=args.imgsz, verbose=False)
         # Using 252 instead of 518 significantly speeds up inference while keeping decent quality
         depth_map = depth_model.infer_image(frame, 252) 
 

@@ -14,6 +14,8 @@ def main():
                         help="Katalog docelowy na gotowe wagi i wykresy (np. na Jetsona)")
     parser.add_argument('--project', type=str, default='./runs', 
                         help="Katalog roboczy dla YOLO (domyślnie: ./runs w obecnym folderze)")
+    parser.add_argument('--model', type=str, default='yolo11n.pt',
+                        help="Bazowy model YOLO do treningu (np. yolo11n.pt, yolo11s.pt)")
     
     args = parser.parse_args()
 
@@ -25,8 +27,8 @@ def main():
     ultralytics.checks()
 
     # --- ETAP 1: TUNING ---
-    print("\n⏳ ETAP 1: Rozpoczynam tuning (30 prób po 50 epok)...")
-    model_tune = YOLO('yolo11n.pt')
+    print(f"\n⏳ ETAP 1: Rozpoczynam tuning modelu {args.model} (30 prób po 50 epok)...")
+    model_tune = YOLO(args.model)
 
     model_tune.tune(
         data=dataset_yaml,
@@ -52,7 +54,7 @@ def main():
 
     # --- ETAP 2: WŁAŚCIWY TRENING ---
     print("\n🚀 ETAP 2: Rozpoczynam Właściwy Trening!")
-    model_final = YOLO('yolo11n.pt')
+    model_final = YOLO(args.model)
 
     # Odpalamy trening z limitem 500 epok i Early Stopping
     results = model_final.train(

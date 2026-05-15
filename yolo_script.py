@@ -1,3 +1,4 @@
+import argparse
 import os
 import torch
 from ultralytics import YOLO
@@ -7,6 +8,22 @@ import matplotlib
 
 from depth_and_distance_measure.depth_anything_v2.dpt import DepthAnythingV2
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Process a single image with YOLO and Depth Estimation")
+    parser.add_argument('--image', type=str, default='./test_images/images2.jpeg',
+                        help="Path to input image")
+    parser.add_argument('--model', type=str, default='/home/powertrain1/YOLO/models/lodz.pt',
+                        help="Path to YOLO model file (.pt or .engine)")
+    parser.add_argument('--depth_weights', type=str, default='depth_anything_v2_vits.pth',
+                        help="Path to DepthAnythingV2 weights (.pth)")
+    parser.add_argument('--output', type=str, default='./results',
+                        help="Directory to save the result")
+    parser.add_argument('--imgsz', type=int, default=640,
+                        help="YOLO inference image size")
+    return parser.parse_args()
+
+args = parse_args()
+
 # CUDA Check
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 if torch.cuda.is_available():
@@ -15,7 +32,7 @@ else:
     print("CUDA is not working, falling back to CPU.")
 
 
-image_path = './test_images/images2.jpeg'
+image_path = args.image
 raw_image = cv2.imread(image_path)
 
 if raw_image is None:
@@ -23,20 +40,20 @@ if raw_image is None:
     exit()
 
 
-model = YOLO('/home/powertrain1/YOLO/models/lodz.pt')
-
-
+print(f"Loading YOLO model: {args.model}")
+model = YOLO(args.model)
 
 model_configs = {
     'vits': {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]}
 }
+print(f"Loading Depth model: {args.depth_weights}")
 depth_model = DepthAnythingV2(**model_configs['vits'])
-depth_model.load_state_dict(torch.load('depth_anything_v2_vits.pth', map_location='cpu'))
+depth_model.load_state_dict(torch.load(args.depth_weights, map_location='cpu'))
 depth_model = depth_model.to(DEVICE).eval()
 
 
 with torch.inference_mode():
-    yolo_result = model(raw_image, device=DEVICE)
+    yolo_result = model(raw_image, device=DEVICE, imgsz=args.imgsz)
     torch.cuda.empty_cache()
     depth_map = depth_model.infer_image(raw_image, 518) 
 
@@ -79,8 +96,8 @@ for box in yolo_result[0].boxes:
     cv2.putText(colored_depth_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
 
-os.makedirs('./results', exist_ok=True)
-output_path = './results/result2.jpeg'
+os.makedirs(args.output, exist_ok=True)
+output_path = os.path.join(args.output, 'result_' + os.path.basename(args.image))
 cv2.imwrite(output_path, colored_depth_image)
 
 print(f"Success! Saved blended depth map image to {output_path}")
